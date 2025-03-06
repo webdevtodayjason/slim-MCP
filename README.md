@@ -19,6 +19,7 @@ A lightweight, modular API service that provides a collection of useful tools th
 - **💰 Currency**: Convert between currencies and get exchange rates
 - **🧮 Calculator**: Perform basic arithmetic calculations
 - **🔍 Search**: Simple web search functionality
+- **🖥️ Cursor Integration**: Supports [Cursor](https://cursor.sh) Model Context Protocol
 
 ## 📋 Requirements
 
@@ -125,6 +126,26 @@ Adding new tools is easy:
 2. Define your tool functions in that file
 3. Register the tool in the `tools` dictionary in `mcp_server.py`
 4. Add route handlers that call your tool functions
+
+## 🖥️ Cursor Integration
+
+This server implements the [Cursor Model Context Protocol](https://docs.cursor.com/context/model-context-protocol), allowing it to be used as a context provider for Cursor, the AI-native code editor.
+
+### Setting up with Cursor:
+
+1. Start the MCP server: `python mcp_server.py`
+2. In Cursor, go to Settings > Chat > Context Providers
+3. Add a new context provider with the following URL:
+   ```
+   http://localhost:5734/cursor/context
+   ```
+4. Test the connection by clicking "Test Connection"
+5. Start using Cursor with MCP as your context provider!
+
+The Cursor integration provides:
+- Web search capabilities (`/cursor/context/search`)
+- Content retrieval (`/cursor/context/retrieve`)
+- Health check endpoint (`/cursor/health`)
 
 ## 📝 License
 

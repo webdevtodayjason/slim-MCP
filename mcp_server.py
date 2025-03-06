@@ -1,14 +1,31 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response, make_response
 import datetime
 import requests
 import os
+import json
+import traceback
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv  # Import python-dotenv
+from functools import wraps
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
+
+# CORS support for Cursor integration
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+    
+# Handle OPTIONS requests for CORS preflight
+@app.route('/', methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def options_handler(path=""):
+    return make_response("", 200)
 
 # MCP Tools Registry
 tools = {
@@ -322,6 +339,105 @@ def currency_rates_tool():
     
     return jsonify({"result": result})
 
+# Cursor Model Context Protocol endpoints
+@app.route('/cursor/context/search', methods=['POST'])
+def cursor_search():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON request"}), 400
+            
+        query = data.get("query", "")
+        
+        if not query:
+            return jsonify({"error": "Query parameter is required"}), 400
+            
+        # Use the DuckDuckGo search tool to provide results
+        results = []
+        try:
+            url = f"https://duckduckgo.com/html/?q={query}"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            response = requests.get(url, headers=headers)
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            for result in soup.find_all("div", class_="result__body", limit=5):
+                title = result.find("a", class_="result__a").text if result.find("a", class_="result__a") else "No title"
+                snippet = result.find("div", class_="result__snippet").text if result.find("div", class_="result__snippet") else "No snippet"
+                link = result.find("a", class_="result__a")['href'] if result.find("a", class_="result__a") else "#"
+                
+                results.append({
+                    "title": title,
+                    "content": snippet,
+                    "url": link
+                })
+        except Exception as e:
+            print(f"Search error: {str(e)}")
+            
+        return jsonify({
+            "items": results
+        })
+    except Exception as e:
+        print(f"Error in cursor search: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/cursor/context/retrieve', methods=['POST'])
+def cursor_retrieve():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON request"}), 400
+            
+        urls = data.get("urls", [])
+        
+        if not urls:
+            return jsonify({"error": "URLs parameter is required"}), 400
+            
+        # Retrieve content for the requested URLs
+        items = []
+        for url in urls:
+            try:
+                headers = {"User-Agent": "Mozilla/5.0"}
+                response = requests.get(url, headers=headers)
+                
+                # Create a basic summary if HTML
+                content = response.text
+                if response.headers.get('Content-Type', '').startswith('text/html'):
+                    soup = BeautifulSoup(content, "html.parser")
+                    # Remove script and style elements
+                    for script in soup(["script", "style"]):
+                        script.extract()
+                    content = soup.get_text()
+                    
+                    # Limit content size
+                    if len(content) > 5000:
+                        content = content[:5000] + "... (content truncated)"
+                
+                items.append({
+                    "url": url,
+                    "content": content
+                })
+            except Exception as e:
+                items.append({
+                    "url": url,
+                    "error": str(e)
+                })
+        
+        return jsonify({
+            "items": items
+        })
+    except Exception as e:
+        print(f"Error in cursor retrieve: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# Add a simple health endpoint for Cursor
+@app.route('/cursor/health', methods=['GET'])
+def cursor_health():
+    return jsonify({"status": "ok", "message": "MCP Server is running and ready to serve Cursor"})
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5734))  # Still allows PORT override for deployment
+    print(f"Starting MCP Server on port {port}...")
+    print(f"Cursor integration available at http://localhost:{port}/cursor/context/search and /cursor/context/retrieve")
     app.run(host="0.0.0.0", port=port, debug=True)
