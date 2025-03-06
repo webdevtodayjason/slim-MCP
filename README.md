@@ -133,19 +133,25 @@ This server implements the [Cursor Model Context Protocol](https://docs.cursor.c
 
 ### Setting up with Cursor:
 
-1. Start the MCP server: `python mcp_server.py`
+1. Start either:
+   - Full MCP server: `python mcp_server.py`, OR
+   - Simple Cursor server: `python simple_cursor_server.py` (if you're having connection issues)
+   
 2. In Cursor, go to Settings > Chat > Context Providers
 3. Add a new context provider with the following URL:
    ```
    http://localhost:5734/cursor/context
    ```
-4. Test the connection by clicking "Test Connection"
-5. Start using Cursor with MCP as your context provider!
+4. Content type: Select "sse" from the dropdown
+5. Test the connection by clicking "Test Connection"
+6. Start using Cursor with MCP as your context provider!
 
 The Cursor integration provides:
 - Web search capabilities (`/cursor/context/search`)
 - Content retrieval (`/cursor/context/retrieve`)
 - Health check endpoint (`/cursor/health`)
+
+If you encounter connection issues with the full MCP server, try using the simple Cursor server instead, which is specifically designed for Cursor integration.
 
 ## 📝 License
 

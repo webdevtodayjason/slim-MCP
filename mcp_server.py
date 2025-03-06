@@ -378,9 +378,12 @@ def cursor_context():
     # If GET request, handle as SSE
     if request.method == 'GET':
         def generate():
-            # Send initial connection message
-            yield "data: " + json.dumps({"status": "connected", "message": "MCP Context Provider connected"}) + "\n\n"
+            # Format exactly as required by Cursor's SSE client - using the format from the docs
+            yield f"id: 1\nevent: message\ndata: {json.dumps({'type': 'connected'})}\n\n"
             
+            # Just send the initial message, Cursor will reconnect as needed
+            # We don't want an infinite loop here as it would block the server
+                
         response = Response(generate(), mimetype="text/event-stream")
         response.headers.add('Cache-Control', 'no-cache')
         response.headers.add('Connection', 'keep-alive')
@@ -392,14 +395,21 @@ def cursor_context():
         if not data:
             return jsonify({"error": "Invalid JSON request"}), 400
             
-        action = data.get("action", "")
-        
-        if action == "search":
+        # Determine what action to take based on the payload
+        if "query" in data:
+            # This is a search request
             return cursor_search()
-        elif action == "retrieve":
+        elif "urls" in data:
+            # This is a retrieve request
             return cursor_retrieve()
         else:
-            return jsonify({"error": "Invalid action. Supported actions: search, retrieve"}), 400
+            action = data.get("action", "")
+            if action == "search":
+                return cursor_search()
+            elif action == "retrieve":
+                return cursor_retrieve()
+            else:
+                return jsonify({"error": "Invalid request format"}), 400
 
 # Add a simple health endpoint for Cursor
 @app.route('/cursor/health', methods=['GET'])
