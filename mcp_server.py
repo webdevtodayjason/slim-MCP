@@ -189,6 +189,10 @@ from calendar_tool import get_month_calendar, get_upcoming_dates
 from email_tool import send_email
 from task_tool import add_task, get_tasks, update_task, delete_task
 from currency_tool import convert_currency, get_exchange_rates
+from cursor_context import CursorContextProvider
+
+# Initialize the Cursor Context Provider
+cursor_provider = CursorContextProvider()
 
 @app.route('/tools/datetime_format', methods=['POST'])
 def datetime_format_tool():
@@ -347,35 +351,8 @@ def cursor_search():
         if not data:
             return jsonify({"error": "Invalid JSON request"}), 400
             
-        query = data.get("query", "")
-        
-        if not query:
-            return jsonify({"error": "Query parameter is required"}), 400
-            
-        # Use the DuckDuckGo search tool to provide results
-        results = []
-        try:
-            url = f"https://duckduckgo.com/html/?q={query}"
-            headers = {"User-Agent": "Mozilla/5.0"}
-            response = requests.get(url, headers=headers)
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            for result in soup.find_all("div", class_="result__body", limit=5):
-                title = result.find("a", class_="result__a").text if result.find("a", class_="result__a") else "No title"
-                snippet = result.find("div", class_="result__snippet").text if result.find("div", class_="result__snippet") else "No snippet"
-                link = result.find("a", class_="result__a")['href'] if result.find("a", class_="result__a") else "#"
-                
-                results.append({
-                    "title": title,
-                    "content": snippet,
-                    "url": link
-                })
-        except Exception as e:
-            print(f"Search error: {str(e)}")
-            
-        return jsonify({
-            "items": results
-        })
+        result = cursor_provider.process_search(data)
+        return jsonify(result)
     except Exception as e:
         print(f"Error in cursor search: {str(e)}")
         traceback.print_exc()
@@ -388,48 +365,41 @@ def cursor_retrieve():
         if not data:
             return jsonify({"error": "Invalid JSON request"}), 400
             
-        urls = data.get("urls", [])
-        
-        if not urls:
-            return jsonify({"error": "URLs parameter is required"}), 400
-            
-        # Retrieve content for the requested URLs
-        items = []
-        for url in urls:
-            try:
-                headers = {"User-Agent": "Mozilla/5.0"}
-                response = requests.get(url, headers=headers)
-                
-                # Create a basic summary if HTML
-                content = response.text
-                if response.headers.get('Content-Type', '').startswith('text/html'):
-                    soup = BeautifulSoup(content, "html.parser")
-                    # Remove script and style elements
-                    for script in soup(["script", "style"]):
-                        script.extract()
-                    content = soup.get_text()
-                    
-                    # Limit content size
-                    if len(content) > 5000:
-                        content = content[:5000] + "... (content truncated)"
-                
-                items.append({
-                    "url": url,
-                    "content": content
-                })
-            except Exception as e:
-                items.append({
-                    "url": url,
-                    "error": str(e)
-                })
-        
-        return jsonify({
-            "items": items
-        })
+        result = cursor_provider.process_retrieve(data)
+        return jsonify(result)
     except Exception as e:
         print(f"Error in cursor retrieve: {str(e)}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+# Main Cursor context endpoint (SSE and WebSocket)
+@app.route('/cursor/context', methods=['GET', 'POST'])
+def cursor_context():
+    # If GET request, handle as SSE
+    if request.method == 'GET':
+        def generate():
+            # Send initial connection message
+            yield "data: " + json.dumps({"status": "connected", "message": "MCP Context Provider connected"}) + "\n\n"
+            
+        response = Response(generate(), mimetype="text/event-stream")
+        response.headers.add('Cache-Control', 'no-cache')
+        response.headers.add('Connection', 'keep-alive')
+        return response
+    
+    # If POST request, handle like a regular API endpoint
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON request"}), 400
+            
+        action = data.get("action", "")
+        
+        if action == "search":
+            return cursor_search()
+        elif action == "retrieve":
+            return cursor_retrieve()
+        else:
+            return jsonify({"error": "Invalid action. Supported actions: search, retrieve"}), 400
 
 # Add a simple health endpoint for Cursor
 @app.route('/cursor/health', methods=['GET'])
@@ -439,5 +409,6 @@ def cursor_health():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5734))  # Still allows PORT override for deployment
     print(f"Starting MCP Server on port {port}...")
-    print(f"Cursor integration available at http://localhost:{port}/cursor/context/search and /cursor/context/retrieve")
+    print(f"Cursor integration available at http://localhost:{port}/cursor/context")
+    print(f"For Cursor integration, use this URL in Cursor settings: http://localhost:{port}/cursor/context")
     app.run(host="0.0.0.0", port=port, debug=True)
