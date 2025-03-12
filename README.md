@@ -13,6 +13,8 @@
 - 🌦️ **Weather**: Get current weather forecasts and alerts
 - 🕒 **DateTime**: Access current time in local and UTC formats
 - 🔌 **Extensible**: Easily add custom tools with simple Python functions
+- 💻 **Desktop Integration**: Seamless integration with Claude Desktop app
+- 🖱️ **Cursor IDE**: Native integration with Cursor IDE for developers
 
 ## 📋 Table of Contents
 
@@ -87,8 +89,9 @@ What's the weather like in Austin, TX?
 
 ## 🔌 Integrations
 
-- **Claude AI**: Primary integration via MCP protocol
+- **Claude AI Desktop**: Primary integration via MCP protocol
 - **Cursor IDE**: Direct integration for development workflows
+- **Claude Web**: Compatible with Claude Web through configuration
 
 ## 💻 Development
 
